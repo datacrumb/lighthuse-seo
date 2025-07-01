@@ -12,16 +12,16 @@ if (!process.env.GOOGLE_SHEET_ID) {
   throw new Error('GOOGLE_SHEET_ID is not set');
 }
 
-const auth = new JWT({
+const jwtClient = new JWT({
   email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
   key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  scopes: [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive',
-  ],
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-const sheets = google.sheets({ version: 'v4', auth });
+const sheets = google.sheets({
+  version: 'v4',
+  auth: jwtClient as any, // 👈 Force-cast if needed (not type-safe, use with caution)
+});
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const SHEET_NAME = 'Sheet1'; // Change if your sheet/tab name is different
 
