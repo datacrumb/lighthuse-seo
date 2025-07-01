@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "google-auth-library": "^10.1.0",
+    "google-auth-library": "^9.15.1",
     "google-spreadsheet": "^4.1.4",
     "googleapis": "^150.0.1",
     "next": "15.3.4",
