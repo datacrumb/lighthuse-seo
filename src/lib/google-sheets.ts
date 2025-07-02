@@ -51,6 +51,8 @@ export async function processGoogleSheet(onProgress: (message: string) => void) 
   let processedCount = 0;
   let skippedCount = 0;
   const errors: string[] = [];
+  let batchUpdates: [string, string][] = [];
+  let batchRowIndices: number[] = [];
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
@@ -95,25 +97,51 @@ export async function processGoogleSheet(onProgress: (message: string) => void) 
         newPerf = 'No Score';
       }
 
-      const updateRange = `${SHEET_NAME}!${String.fromCharCode(65 + seoIdx)}${rowIndex}:${String.fromCharCode(65 + perfIdx)}${rowIndex}`;
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: sheetId,
-        range: updateRange,
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: [[newSeo, newPerf]],
-        },
-      });
-
-      onProgress(`Updated scores for row ${rowIndex}: ${url}`);
+      batchUpdates.push([newSeo, newPerf]);
+      batchRowIndices.push(rowIndex);
       processedCount++;
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      onProgress(`Queued scores for row ${rowIndex}: ${url}`);
+
+      // If batch is full, send update
+      if (batchUpdates.length === 5) {
+        const updateRequests = batchRowIndices.map((rowIdx, idx) => ({
+          range: `${SHEET_NAME}!${String.fromCharCode(65 + seoIdx)}${rowIdx}:${String.fromCharCode(65 + perfIdx)}${rowIdx}`,
+          values: [batchUpdates[idx]],
+        }));
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: sheetId,
+          requestBody: {
+            valueInputOption: 'RAW',
+            data: updateRequests,
+          },
+        });
+        batchUpdates = [];
+        batchRowIndices = [];
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     } catch (e: any) {
       const errorMessage = `Error processing row ${rowIndex}: ${e.message}`;
       onProgress(errorMessage);
       errors.push(errorMessage);
       continue;
     }
+  }
+
+  // Write any remaining updates
+  if (batchUpdates.length > 0) {
+    const updateRequests = batchRowIndices.map((rowIdx, idx) => ({
+      range: `${SHEET_NAME}!${String.fromCharCode(65 + seoIdx)}${rowIdx}:${String.fromCharCode(65 + perfIdx)}${rowIdx}`,
+      values: [batchUpdates[idx]],
+    }));
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: sheetId,
+      requestBody: {
+        valueInputOption: 'RAW',
+        data: updateRequests,
+      },
+    });
+    batchUpdates = [];
+    batchRowIndices = [];
   }
 
   onProgress("\nProcessing complete!");
@@ -133,10 +161,8 @@ async function analyzeUrlWithRetry(url: string, onProgress: (message: string) =>
   for (let i = 0; i < retries; i++) {
     try {
       onProgress(`Analyzing URL: ${url} (Attempt ${i + 1}/${retries})`);
-      // Use the new PageSpeed Insights API logic
       const { runPageSpeedInsights } = await import('./lighthouse');
       const data = await runPageSpeedInsights(url, 'mobile');
-      // Extract scores (they are 0-1, multiply by 100 for percentage)
       const seo = data.lighthouseResult?.categories?.seo?.score != null
         ? data.lighthouseResult.categories.seo.score * 100
         : null;
@@ -145,11 +171,19 @@ async function analyzeUrlWithRetry(url: string, onProgress: (message: string) =>
         : null;
       return { seo, performance };
     } catch (e: any) {
-      onProgress(`Attempt ${i + 1} failed for ${url}: ${e.message}`);
+      // Handle 429 Too Many Requests
+      if (e.message && e.message.includes('429')) {
+        onProgress(`Rate limit hit (429) for ${url}, waiting before retry...`);
+        // Wait longer for 429 errors (e.g., 10 seconds)
+        await new Promise(resolve => setTimeout(resolve, 10000));
+      } else {
+        onProgress(`Attempt ${i + 1} failed for ${url}: ${e.message}`);
+        // Wait 2 seconds for other errors
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
       if (i === retries - 1) {
         return { seo: null, performance: null };
       }
-      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
   return { seo: null, performance: null };
