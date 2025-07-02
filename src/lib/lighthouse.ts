@@ -1,13 +1,14 @@
 export async function runPageSpeedInsights(
   url: string,
-  strategy: 'mobile' | 'desktop' = 'mobile'
+  strategy: 'mobile' | 'desktop' = 'desktop'
 ) {
   const apiKey = process.env.PSI_API_KEY;
   if (!apiKey) throw new Error('PSI_API_KEY is not set in environment variables.');
 
+  // Explicitly request both performance and seo categories
   const endpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(
     url
-  )}&strategy=${strategy}&key=${apiKey}`;
+  )}&strategy=${strategy}&category=performance&category=seo&key=${apiKey}`;
 
   const res = await fetch(endpoint);
   if (!res.ok) {
