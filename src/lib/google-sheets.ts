@@ -67,8 +67,9 @@ export async function processGoogleSheet(onProgress: (message: string) => void) 
       const seoScore = row[seoIdx];
       const performanceScore = row[perfIdx];
 
-      if (seoScore && performanceScore) {
-        onProgress(`Skipping row ${rowIndex}: Both scores already present`);
+      // Skip if either SEO or Performance already has a value (number or 'No Score')
+      if ((seoScore && seoScore !== '') || (performanceScore && performanceScore !== '')) {
+        onProgress(`Skipping row ${rowIndex}: SEO or Performance score already present`);
         skippedCount++;
         continue;
       }
