@@ -15,6 +15,5 @@ export async function runPageSpeedInsights(
     throw new Error(`PageSpeed API error: ${res.status} - ${errorText}`);
   }
   const data = await res.json();
-  console.log(JSON.stringify(data, null, 2)); // Log the full response
   return data;
 }
