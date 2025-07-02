@@ -35,7 +35,7 @@ export async function processGoogleSheet(onProgress: (message: string) => void) 
   // 1. Read all rows
   const getRes = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: `${SHEET_NAME}!A1:Z100`,
+    range: `${SHEET_NAME}!A1:Z`
   });
 
   const values = getRes.data.values || [];
