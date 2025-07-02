@@ -1,4 +1,3 @@
-import type { LighthouseScores } from './lighthouse';
 import { google } from 'googleapis';
 
 const SHEET_NAME = 'Sheet1'; // Change if needed
@@ -129,12 +128,21 @@ export async function processGoogleSheet(onProgress: (message: string) => void) 
 }
 
 // ✅ Make sure this is not at top-level
-async function analyzeUrlWithRetry(url: string, onProgress: (message: string) => void, retries = 3): Promise<LighthouseScores> {
+async function analyzeUrlWithRetry(url: string, onProgress: (message: string) => void, retries = 3): Promise<{ seo: number|null, performance: number|null }> {
   for (let i = 0; i < retries; i++) {
     try {
       onProgress(`Analyzing URL: ${url} (Attempt ${i + 1}/${retries})`);
-      const scores = await (await import('./lighthouse')).analyzeUrl(url);
-      return scores;
+      // Use the new PageSpeed Insights API logic
+      const { runPageSpeedInsights } = await import('./lighthouse');
+      const data = await runPageSpeedInsights(url, 'mobile');
+      // Extract scores (they are 0-1, multiply by 100 for percentage)
+      const seo = data.lighthouseResult?.categories?.seo?.score != null
+        ? data.lighthouseResult.categories.seo.score * 100
+        : null;
+      const performance = data.lighthouseResult?.categories?.performance?.score != null
+        ? data.lighthouseResult.categories.performance.score * 100
+        : null;
+      return { seo, performance };
     } catch (e: any) {
       onProgress(`Attempt ${i + 1} failed for ${url}: ${e.message}`);
       if (i === retries - 1) {
