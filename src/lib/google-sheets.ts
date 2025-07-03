@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { google } from 'googleapis';
 
 const SHEET_NAME = 'Sheet1'; // Change if needed
