@@ -99,7 +99,7 @@ async function processGoogleSheet(onProgress) {
             if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
                 fullUrl = 'https://' + fullUrl;
             }
-            const lighthouseScores = await analyzeUrlWithRetry(fullUrl, onProgress);
+            const lighthouseScores = await analyzeUrl(fullUrl, onProgress);
             let newSeo = seoScore;
             let newPerf = performanceScore;
             if (!seoScore && lighthouseScores.seo !== null) {
@@ -169,7 +169,7 @@ async function processGoogleSheet(onProgress) {
     return { processedCount, skippedCount, errors };
 }
 // ✅ Make sure this is not at top-level
-async function analyzeUrlWithRetry(url, onProgress, retries = 3) {
+async function analyzeUrl(url, onProgress, retries = 3) {
     var _a, _b, _c, _d, _e, _f;
     for (let i = 0; i < retries; i++) {
         try {

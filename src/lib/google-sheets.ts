@@ -61,8 +61,26 @@ export async function processGoogleSheet(onProgress: (message: string) => void) 
 
     try {
       const url = row[websiteIdx];
-      if (!url || typeof url !== 'string' || !url.trim()) {
-        onProgress(`Skipping row ${rowIndex}: Empty URL`);
+      if (
+        !url ||
+        typeof url !== 'string' ||
+        !url.trim() ||
+        url.trim().toLowerCase() === 'NOT FOUND' ||
+        url.trim().toLowerCase() === 'N/A' ||
+        url.trim().toLowerCase() === 'not found' ||
+        url.trim().toLowerCase() === 'na' ||
+        url.trim().toLowerCase() === 'none' ||
+        url.trim().toLowerCase() === 'null' ||
+        url.trim().toLowerCase() === 'undefined' ||
+        url.trim().toLowerCase() === '-' ||
+        url.trim().toLowerCase() === '--' ||
+        url.trim().toLowerCase() === 'no url' ||
+        url.trim().toLowerCase() === 'missing' ||
+        url.trim().toLowerCase() === 'empty' ||
+        url.trim().toLowerCase() === 'n\\a' ||
+        url.trim().toLowerCase().endsWith('.pdf')
+      ) {
+        onProgress(`Skipping row ${rowIndex}: Invalid or unsupported URL (${url})`);
         skippedCount++;
         continue;
       }
@@ -82,7 +100,7 @@ export async function processGoogleSheet(onProgress: (message: string) => void) 
         fullUrl = 'https://' + fullUrl;
       }
 
-      const lighthouseScores = await analyzeUrlWithRetry(fullUrl, onProgress);
+      const lighthouseScores = await analyzeUrl(fullUrl, onProgress);
       let newSeo = seoScore;
       let newPerf = performanceScore;
 
@@ -158,34 +176,20 @@ export async function processGoogleSheet(onProgress: (message: string) => void) 
 }
 
 // ✅ Make sure this is not at top-level
-async function analyzeUrlWithRetry(url: string, onProgress: (message: string) => void, retries = 3): Promise<{ seo: number|null, performance: number|null }> {
-  for (let i = 0; i < retries; i++) {
-    try {
-      onProgress(`Analyzing URL: ${url} (Attempt ${i + 1}/${retries})`);
-      const { runPageSpeedInsights } = await import('./lighthouse');
-      const data = await runPageSpeedInsights(url, 'mobile');
-      const seo = data.lighthouseResult?.categories?.seo?.score != null
-        ? data.lighthouseResult.categories.seo.score * 100
-        : null;
-      const performance = data.lighthouseResult?.categories?.performance?.score != null
-        ? data.lighthouseResult.categories.performance.score * 100
-        : null;
-      return { seo, performance };
-    } catch (e: any) {
-      // Handle 429 Too Many Requests
-      if (e.message && e.message.includes('429')) {
-        onProgress(`Rate limit hit (429) for ${url}, waiting before retry...`);
-        // Wait longer for 429 errors (e.g., 10 seconds)
-        await new Promise(resolve => setTimeout(resolve, 10000));
-      } else {
-        onProgress(`Attempt ${i + 1} failed for ${url}: ${e.message}`);
-        // Wait 2 seconds for other errors
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-      if (i === retries - 1) {
-        return { seo: null, performance: null };
-      }
-    }
+async function analyzeUrl(url: string, onProgress: (message: string) => void, retries = 3): Promise<{ seo: number|null, performance: number|null }> {
+  try {
+    onProgress(`Analyzing URL: ${url}`);
+    const { runPageSpeedInsights } = await import('./lighthouse');
+    const data = await runPageSpeedInsights(url, 'mobile');
+    const seo = data.lighthouseResult?.categories?.seo?.score != null
+      ? data.lighthouseResult.categories.seo.score * 100
+      : null;
+    const performance = data.lighthouseResult?.categories?.performance?.score != null
+      ? data.lighthouseResult.categories.performance.score * 100
+      : null;
+    return { seo, performance };
+  } catch (e: any) {
+    onProgress(`Failed to analyze ${url}: ${e.message}`);
+    return { seo: null, performance: null };
   }
-  return { seo: null, performance: null };
 }
