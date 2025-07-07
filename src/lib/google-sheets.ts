@@ -52,8 +52,6 @@ export async function processGoogleSheet(onProgress: (message: string) => void) 
   let processedCount = 0;
   let skippedCount = 0;
   const errors: string[] = [];
-  let batchUpdates: [string, string][] = [];
-  let batchRowIndices: number[] = [];
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
@@ -116,51 +114,29 @@ export async function processGoogleSheet(onProgress: (message: string) => void) 
         newPerf = 'No Score';
       }
 
-      batchUpdates.push([newSeo, newPerf]);
-      batchRowIndices.push(rowIndex);
+      // Immediately update the sheet for this row
+      const updateRequest = {
+        range: `${SHEET_NAME}!${String.fromCharCode(65 + seoIdx)}${rowIndex}:${String.fromCharCode(65 + perfIdx)}${rowIndex}`,
+        values: [[newSeo, newPerf]],
+      };
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          valueInputOption: 'RAW',
+          data: [updateRequest],
+        },
+      });
       processedCount++;
-      onProgress(`Queued scores for row ${rowIndex}: ${url}`);
+      onProgress(`Updated scores for row ${rowIndex}: ${url}`);
+      // Wait 1 second between updates to avoid rate limits
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // If batch is full, send update
-      if (batchUpdates.length === 5) {
-        const updateRequests = batchRowIndices.map((rowIdx, idx) => ({
-          range: `${SHEET_NAME}!${String.fromCharCode(65 + seoIdx)}${rowIdx}:${String.fromCharCode(65 + perfIdx)}${rowIdx}`,
-          values: [batchUpdates[idx]],
-        }));
-        await sheets.spreadsheets.values.batchUpdate({
-          spreadsheetId: sheetId,
-          requestBody: {
-            valueInputOption: 'RAW',
-            data: updateRequests,
-          },
-        });
-        batchUpdates = [];
-        batchRowIndices = [];
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
     } catch (e: any) {
       const errorMessage = `Error processing row ${rowIndex}: ${e.message}`;
       onProgress(errorMessage);
       errors.push(errorMessage);
       continue;
     }
-  }
-
-  // Write any remaining updates
-  if (batchUpdates.length > 0) {
-    const updateRequests = batchRowIndices.map((rowIdx, idx) => ({
-      range: `${SHEET_NAME}!${String.fromCharCode(65 + seoIdx)}${rowIdx}:${String.fromCharCode(65 + perfIdx)}${rowIdx}`,
-      values: [batchUpdates[idx]],
-    }));
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: sheetId,
-      requestBody: {
-        valueInputOption: 'RAW',
-        data: updateRequests,
-      },
-    });
-    batchUpdates = [];
-    batchRowIndices = [];
   }
 
   onProgress("\nProcessing complete!");
